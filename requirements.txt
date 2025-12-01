@@ -1,8 +1,8 @@
-Flask==3.0.0
-flask-cors==4.0.0
-tensorflow-cpu==2.15.0
-Pillow==10.0.0
-gunicorn==21.2.0
-numpy==1.26.0
-h5py==3.10.0
-Werkzeug==3.0.1
+Flask
+flask-cors
+tensorflow-cpu
+Pillow
+gunicorn
+numpy
+h5py
+Werkzeug
