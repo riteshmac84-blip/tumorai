@@ -1,19 +1,19 @@
 import os
 import uuid
 import logging
-import gc  # Garbage Collector for Memory Management
+import gc  # Memory cleanup ke liye zaroori
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
-# --- OPTIMIZATION 1: Force CPU & Reduce Memory ---
+# --- CONFIGURATION ---
+# TensorFlow ko CPU mode par force karein (Crash bachane ke liye)
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-# Standard Imports
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from tensorflow.keras import backend as K # Session clear karne ke liye
 
-# --- CONFIGURATION ---
 class Config:
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', './uploads')
     MODEL_PATH = os.environ.get('MODEL_PATH', 'model.h5')
@@ -25,25 +25,22 @@ class Config:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# App Initialization
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# NOTE: CORS lines removed as requested. 
-# Ensure Frontend uses relative path "/api/predict"
-
+# Folder Ensure Karein
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
-# --- OPTIMIZATION 2: GLOBAL VARIABLES (LAZY LOADING) ---
+# --- GLOBAL VARIABLES ---
 class_labels = ['pituitary', 'glioma', 'notumor', 'meningioma']
-model = None  # Model ko abhi load mat karo (Start fast hoga)
+model = None
 
 def get_model():
-    """Loads model only when needed (Lazy Loading)."""
+    """Lazy Loading: Model tabhi load hoga jab pehli request aayegi."""
     global model
     if model is None:
-        logger.info("⏳ Loading model into memory (First Request)...")
+        logger.info("⏳ Loading model into memory...")
         try:
             model = load_model(app.config['MODEL_PATH'])
             logger.info("✅ Model loaded successfully!")
@@ -73,9 +70,8 @@ def load_and_preprocess_image(image_path):
 
 @app.route('/status', methods=['GET'])
 def get_status():
-    # Check status without crashing memory
-    status = "Model Loaded" if model else "Waiting for First Request"
-    return jsonify({"status": "ok", "message": "Server is running", "model": status})
+    status = "Model Loaded" if model else "Waiting for Request"
+    return jsonify({"status": "ok", "message": "Server is running (Stable)", "model": status})
 
 @app.route('/api/predict', methods=['POST'])
 def api_predict():
@@ -88,16 +84,16 @@ def api_predict():
 
     file_location = None
     try:
-        # 2. Save File
+        # 2. Save File (Disk I/O - Reliable Method)
         ext = file.filename.rsplit('.', 1)[1].lower()
         filename = f"{uuid.uuid4()}.{ext}"
         file_location = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(file_location)
 
-        # 3. Load Model (Lazy Load happens here)
+        # 3. Load Model
         active_model = get_model()
         if active_model is None:
-            return jsonify({"status": "error", "message": "Model could not be loaded on server."}), 500
+            return jsonify({"status": "error", "message": "Model could not be loaded."}), 500
 
         # 4. Preprocess
         img_array = load_and_preprocess_image(file_location)
@@ -132,11 +128,15 @@ def api_predict():
         return jsonify({"status": "error", "message": "Server Error"}), 500
 
     finally:
-        # 7. OPTIMIZATION 3: CLEANUP & MEMORY RELEASE
+        # 7. CLEANUP (File delete + Memory clear)
         if file_location and os.path.exists(file_location):
-            os.remove(file_location)
+            try:
+                os.remove(file_location)
+            except:
+                pass
         
-        # Explicitly free up memory for Render Free Tier
+        # Free up RAM immediately (Render Free Tier ke liye zaroori)
+        K.clear_session()
         gc.collect() 
 
 @app.route('/', methods=['GET'])
