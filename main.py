@@ -4,7 +4,6 @@ import logging
 import gc  # Garbage Collector for Memory Management
 import numpy as np
 from flask import Flask, render_template, request, jsonify, send_from_directory
-from flask_cors import CORS
 
 # --- OPTIMIZATION 1: Force CPU & Reduce Memory ---
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -29,7 +28,9 @@ logger = logging.getLogger(__name__)
 # App Initialization
 app = Flask(__name__)
 app.config.from_object(Config)
-CORS(app)
+
+# NOTE: CORS lines removed as requested. 
+# Ensure Frontend uses relative path "/api/predict"
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
